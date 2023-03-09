@@ -34,7 +34,7 @@ def plot_ts_open_hatch(dfi=None, fac_id=None, t_drone_open_hatch=None, plot_dir=
 
 def plot_prediction_validation(df, df_pred, facility_id):
 
-    fig = make_subplots(rows=3, cols=1, shared_xaxes=True)
+    fig = make_subplots(rows=4, cols=1, shared_xaxes=True)
 
     # plot pressure with drone detected open hatch time
     fig_ts = plot_ts_open_hatch(dfi=df, fac_id=facility_id)
@@ -49,10 +49,15 @@ def plot_prediction_validation(df, df_pred, facility_id):
     fig_pred = px.bar(df_pred, x='TimeStamp', y='Status_Predicted')
     fig.add_trace(fig_pred.data[0], row=3, col=1)
 
-    fig.update_xaxes(title_text='TimeStamp', row=3, col=1)
-    fig.update_yaxes(title_text = 'Tank Header Pressure', row=1, col=1)
-    fig.update_yaxes(title_text = 'Status: Ground Truth', row=2, col=1)
-    fig.update_yaxes(title_text = 'Status: Model Prediction', row=3, col=1)
+    # plot model results bar chart
+    fig_conf = px.line(df_pred, x='TimeStamp', y='Model_Confidence')
+    fig.add_trace(fig_conf.data[0], row=4, col=1)
+
+    fig.update_xaxes(title_text='TimeStamp', row=4, col=1)
+    fig.update_yaxes(title_text = 'Pressure', row=1, col=1)
+    fig.update_yaxes(title_text = 'Ground Truth', row=2, col=1)
+    fig.update_yaxes(title_text = 'Prediction', row=3, col=1)
+    fig.update_yaxes(title_text = 'Confidence', row=4, col=1)
 
     fig.update_layout(title_text= f'Model predicted hatch status vs groud truth {facility_id}', height=900, width=1600, font=dict(size=16))
 

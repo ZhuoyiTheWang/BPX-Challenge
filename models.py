@@ -1,6 +1,10 @@
 import random 
-import pandas as pd 
 import numpy as np
+import pandas as pd 
+import keras
+import tensorflow as tf
+from datetime import datetime, timedelta
+
 
 def model_random(df, t_pred):
     # free feel to use data earlier than df.timestamp.min()
@@ -50,17 +54,79 @@ def search_for_open_hatch_random(df, facility_id):
 
     return events
 
-def model_predict_open_hatch():
-    # your model for challenge 2
-    return 
 
-def search_for_open_hatch():
 
+def model_predict_open_hatch(df:pd.core.frame.DataFrame, t_pred:datetime, model=None):
+    #get overall info
+    mean = df["pressure_osi"].mean()
+    std = df["pressure_osi"].std()
+    #get local info
+    dfLocal = df[(df.timestamp > t_pred-timedelta(days=2))&
+                            (df.timestamp < t_pred)]
+    localMean = dfLocal["pressure_osi"].mean()
+    localSTD = dfLocal["pressure_osi"].std()
+    #build test input
+    testInput = tf.constant([[mean, std, localMean, localSTD]])
+
+    #load model from 'models/model' if not already loaded
+    if model is None: model = keras.models.load_model("models/model", custom_objects={"test":(lambda x, y: 0)})
+
+    #predict
+    prediction = model.predict(testInput, verbose=0)[0][0]
+    #fix data that is NaN
+    if np.isnan(prediction):
+        prediction = 0.499999
+
+    return [int(prediction+0.5), 2*abs(0.5-prediction)]
+
+
+def search_for_open_hatch(df:pd.core.frame.DataFrame, fac_id:int):
+
+    #we know this is bad, but we are pressed for time at the moment
+    pd.set_option('mode.chained_assignment', None)
+
+    #search every 2 days
+    search_freq = timedelta(days=2)
+
+    #automatically set start and stop time
+    t_strt = pd.to_datetime(df.timestamp.iloc[0])
+    t_strt = t_strt.round("D")
+    t_strt += timedelta(days=2)
+    t_stop = pd.to_datetime(df.timestamp.iloc[-1])
+    t_stop = t_stop.round("D")
+
+    df.timestamp = pd.to_datetime(df.timestamp)
+    df = df[df.timestamp.between(t_strt, t_stop)]
+
+    #load model from 'models/model' (note: this is for predicting only)
+    model = keras.models.load_model("models/model", custom_objects={"error":(lambda x, y: 0)})
+
+    hatch_open = False
+    t_open = None
+    times = []
+    while t_strt <= t_stop:
+        
+        #add a new datapoint with prediction
+        prediction, confidence = model_predict_open_hatch(df, t_strt, model)
+
+        #start a new event:
+        if prediction and confidence > 0.9999:
+            if not hatch_open:
+                hatch_open = True
+                t_open = t_strt
+        #end an event
+        elif hatch_open:
+            #only record events that last at least 4 days
+            if (t_strt - t_open) > timedelta(days=4):
+                times.append((t_open, t_strt))
+            hatch_open = False
+            
+        t_strt += search_freq
     
-    """
-    # your model for challenge 3
-    replace your own model here that searches whether a time series include open/close hatch events
-
-    """
-
-    return 
+    if hatch_open:
+        times.append((t_open, t_stop))
+    
+    events = []
+    events = [(fac_id, len(times), i, opened, closed) for i, (opened, closed) in enumerate(times)]
+    
+    return events
